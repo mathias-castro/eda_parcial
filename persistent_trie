@@ -1,0 +1,100 @@
+#include <iostream>
+#include <vector>
+#include <string>
+using namespace std;
+
+
+class PersistentTrie {
+private:
+    static const int ALPHA = 26;
+
+    struct Node {
+        int next[ALPHA];   // indice del hijo por cada letra (0 = no existe)
+        bool isEnd;        // alguna palabra termina aqui
+        Node() : isEnd(false) { for (int &x : next) x = 0; }
+    };
+
+    vector<Node> nodes;    // pool de nodos
+    vector<int> roots;     // roots[v] = raiz de la version v
+
+    // Crea una copia del nodo x (sus punteros a hijos y su marca). O(1)
+    int clone(int x) {
+        Node copy = nodes[x];          // copiar antes de push_back (evita referencias invalidas)
+        nodes.push_back(copy);
+        return (int)nodes.size() - 1;
+    }
+
+    // Baja por la palabra s desde 'node'. Devuelve el nodo final, o 0 si se corta.
+    int walk(int node, const string& s) const {
+        for (char ch : s) {
+            node = nodes[node].next[ch - 'a'];
+            if (node == 0) return 0;
+        }
+        return node;
+    }
+
+public:
+    PersistentTrie() {
+        nodes.push_back(Node());       // nodo 0: nulo
+        nodes.push_back(Node());       // nodo 1: raiz vacia
+        roots.push_back(1);            // version 0 = trie vacio
+    }
+
+    // Version nueva = version v + la palabra s. Devuelve el numero de la version. O(L)
+    int insert(int v, const string& s) {
+        int oldCur = roots[v];
+        int newRoot = clone(oldCur);   // copio la raiz
+        int cur = newRoot;
+
+        for (char ch : s) {
+            int c = ch - 'a';
+            int oldChild = nodes[oldCur].next[c];   // puede ser 0 (no existia)
+            int newChild = clone(oldChild);         // copio SOLO el hijo del camino
+            nodes[cur].next[c] = newChild;          // los otros 25 hijos quedan compartidos
+            cur = newChild;
+            oldCur = oldChild;
+        }
+        nodes[cur].isEnd = true;       // marca fin de palabra
+
+        roots.push_back(newRoot);
+        return (int)roots.size() - 1;
+    }
+
+    // ¿La palabra s esta en la version v? O(L)
+    bool contains(int v, const string& s) const {
+        int node = walk(roots[v], s);
+        return node != 0 && nodes[node].isEnd;
+    }
+
+    // ¿Alguna palabra de la version v empieza con p? O(L)
+    bool hasPrefix(int v, const string& p) const {
+        return p.empty() || walk(roots[v], p) != 0;
+    }
+
+    int versions() const { return (int)roots.size(); }
+    int totalNodes() const { return (int)nodes.size(); }
+};
+
+int main() {
+    PersistentTrie t;
+
+    int v1 = t.insert(0, "sol");     // v1: {sol}
+    int v2 = t.insert(v1, "sal");    // v2: {sol, sal}
+    int v3 = t.insert(v2, "solo");   // v3: {sol, sal, solo}
+    int v4 = t.insert(v1, "sin");    // v4: {sol, sin}   <- rama desde v1
+
+    cout << boolalpha;
+    cout << "sal en v1:  " << t.contains(v1, "sal")  << '\n';  // false
+    cout << "sal en v2:  " << t.contains(v2, "sal")  << '\n';  // true
+    cout << "solo en v2: " << t.contains(v2, "solo") << '\n';  // false
+    cout << "solo en v3: " << t.contains(v3, "solo") << '\n';  // true
+    cout << "sol en v3:  " << t.contains(v3, "sol")  << '\n';  // true
+    cout << "so en v3:   " << t.contains(v3, "so")   << '\n';  // false (no es palabra)
+    cout << "prefijo so en v3: " << t.hasPrefix(v3, "so") << '\n';  // true
+    cout << "sin en v4:  " << t.contains(v4, "sin")  << '\n';  // true
+    cout << "sin en v3:  " << t.contains(v3, "sin")  << '\n';  // false
+    cout << "sal en v4:  " << t.contains(v4, "sal")  << '\n';  // false
+
+    cout << "nodos totales: " << t.totalNodes() << '\n';
+    return 0;
+}

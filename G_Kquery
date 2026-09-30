@@ -1,0 +1,143 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+struct SegmentTreeNode{
+    int val;
+    int l,r;
+    SegmentTreeNode *left;
+    SegmentTreeNode *right;
+
+    SegmentTreeNode(int l, int r, int val, SegmentTreeNode *left = nullptr, SegmentTreeNode *right = nullptr){
+        this->l = l;
+        this->r = r;
+        this->left = left;
+        this->right = right;
+        this->val = val;
+    }
+};
+
+struct PersistentSegmentTree{
+    vector<SegmentTreeNode*> root_versions;
+
+    PersistentSegmentTree(int l, int r){
+        root_versions.emplace_back(new SegmentTreeNode(l,r,0,nullptr,nullptr));
+        build(root_versions[0],l,r);
+    };
+
+    void build(SegmentTreeNode *root, int l, int r){
+        if (l == r){
+            root->val = 0;
+            return;
+        }
+        int mid = (l+r)/2;
+
+        root->left = new SegmentTreeNode(l,mid, 0, nullptr,nullptr);
+        root->right = new SegmentTreeNode(mid+1,r,0,nullptr,nullptr);
+
+        build(root->left,l,mid);
+        build(root->right,mid+1,r);
+
+        root->val = root->left->val + root->right->val;
+    }
+
+    int query (SegmentTreeNode *root, int l, int r){
+        if (l > root->r || r < root->l){
+            return 0;
+        }
+        if (l <= root->l && r >= root->r){
+            return root->val;
+        }
+        int mid = (root->l + root->r) /2;
+
+        return query(root->left,l,r) + query(root->right,l,r);
+    }
+
+    int query(int i, int j, int k){
+        SegmentTreeNode *root_i = root_versions[i-1];
+        SegmentTreeNode *root_j = root_versions[j];
+
+        return query(root_j,k,root_j->r) -  query(root_i,k,root_i->r);
+    }
+
+    void update(SegmentTreeNode *curr, SegmentTreeNode *prev,  int pos){
+            if (curr->l == curr->r){
+                curr->val = curr->val + 1;
+                return;
+            }
+            int mid = (curr->l + curr->r) /2;
+            if (pos <= mid){
+                curr->right = prev->right;
+                curr->left = new SegmentTreeNode(curr->l,mid,prev->left->val,prev->left->left,prev->left->right);
+                update(curr->left,prev->left,pos);
+            }
+            else{
+                curr->left = prev->left;
+                curr->right = new SegmentTreeNode(mid+1,curr->r,prev->right->val,prev->right->left,prev->right->right);
+                update(curr->right,prev->right,pos);
+            }
+            curr->val = curr->left->val + curr->right->val;
+    };
+
+    void update(int version, int pos){
+        SegmentTreeNode *prevRoot = root_versions[version];
+        SegmentTreeNode *newRoot = new SegmentTreeNode(prevRoot->l, prevRoot->r, prevRoot->val, prevRoot->left, prevRoot->right);
+        update(newRoot,prevRoot, pos);
+        root_versions.push_back(newRoot);
+        return;
+}
+};
+
+int main(){
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    int n,x;
+    cin>>n;
+    vector<int> data;
+    for (int i = 0 ; i < n ; i++){
+        cin>>x;
+        data.emplace_back(x);
+    }
+
+    vector<int> arr_compressed = data;
+    sort(arr_compressed.begin(),arr_compressed.end());
+    arr_compressed.erase(unique(arr_compressed.begin(), arr_compressed.end()), arr_compressed.end());
+    int n2 = arr_compressed.size();
+    PersistentSegmentTree tree(0,n2-1);
+
+    for (int i = 0 ; i < data.size() ; i++){
+        int compressed_pos = lower_bound(arr_compressed.begin(), arr_compressed.end(), data[i]) - arr_compressed.begin();
+        tree.update(i,compressed_pos);
+        }
+
+    int a,b,c,q;
+    cin>>q;
+
+    int res = 0;
+    
+    for (int p = 0 ; p < q ; p++){
+        int a, b, c;
+        cin >> a >> b >> c;
+        
+        int i = a ^ res;
+        int j = b ^ res;
+        int k = c ^ res;
+        
+        if (i < 1) i = 1;
+        if (j > n) j = n;
+        
+        if (i > j) {
+            res = 0;
+            cout << 0 << "\n";
+            continue;
+        }
+
+        int compressed_pos = upper_bound(arr_compressed.begin(), arr_compressed.end(), k) - arr_compressed.begin();
+        
+        res = tree.query(i, j, compressed_pos);
+        
+        cout << res << "\n";
+    }
+    return 0;
+}
